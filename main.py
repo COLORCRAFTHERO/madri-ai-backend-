@@ -28,19 +28,16 @@ Esquema:
 """
 
 def extract_json_maybe(text: str):
-# 1) Intento directo
 try:
 return json.loads(text)
 except Exception:
 pass
-# 2) Extraer primer bloque {...}
 m = re.search(r'{[\s\S]*}', text)
 if m:
 try:
 return json.loads(m.group(0))
 except Exception:
 pass
-# 3) Fallback
 return {"raw": text.strip()}
 
 @app.route('/api/health', methods=['GET'])
@@ -53,31 +50,26 @@ body = request.get_json(silent=True) or {}
 idea = (body.get('idea') or '').strip()
 if not idea:
 return jsonify({"error": "Idea required"}), 400
-
-text
-# 1) Generar brief con Gemini
 try:
-    model = genai.GenerativeModel(MODEL_NAME)
-    prompt = f"{SYSTEM_PROMPT}\nIDEA: {idea}"
-    resp = model.generate_content(prompt)
-    text = (getattr(resp, 'text', '') or '').strip()
-    brief = extract_json_maybe(text)
-    # Validación mínima
-    for k in ["name", "description", "target_market", "price"]:
-        brief.setdefault(k, "")
+model = genai.GenerativeModel(MODEL_NAME)
+prompt = f"{SYSTEM_PROMPT}\nIDEA: {idea}"
+resp = model.generate_content(prompt)
+text = (getattr(resp, 'text', '') or '').strip()
+brief = extract_json_maybe(text)
+for k in ["name", "description", "target_market", "price"]:
+brief.setdefault(k, "")
 except Exception as e:
-    return jsonify({"error": f"Gemini: {str(e)}"}), 500
-
-# 2) Guardar en Supabase
+return jsonify({"error": f"Gemini: {str(e)}"}), 500
 try:
-    ins = sb.table('projects').insert({
-        "idea": idea,
-        "brief": brief
-    }).execute()
-    pid = ins.data["id"] if ins.data else None
-    return jsonify({"status": "ok", "project_id": pid, "brief": brief})
+ins = sb.table('projects').insert({
+"idea": idea,
+"brief": brief
+}).execute()
+pid = ins.data["id"] if ins.data else None
+return jsonify({"status": "ok", "project_id": pid, "brief": brief})
 except Exception as e:
-    return jsonify({"error": f"Supabase: {str(e)}"}), 500
+return jsonify({"error": f"Supabase: {str(e)}"}), 500
+
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
 res = sb.table('projects').select("*").order('created_at', desc=True).limit(50).execute()
